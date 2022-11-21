@@ -1,0 +1,96 @@
+Sample.Id,Batch,Type,Surgery,IDH1,MGMT,Recurrence,Death
+RT01A,1,preRT,GTR,wt,met,yes,no
+RT02A,1,postRT,GTR,wt,met,yes,no
+RT03A,1,preRT,STR,mut,NA,no,no
+RT04A,1,postRT,STR,mut,NA,no,no
+RT05A,1,preRT,GTR,wt,met,yes,yes
+RT06A,1,postRT,GTR,wt,met,yes,yes
+RT07A,1,preRT,STR,wt,no met,yes,yes
+RT08A,1,postRT,STR,wt,no met,yes,yes
+RT09A,1,preRT,STR,wt,met,yes,yes
+RT10A,1,postRT,STR,wt,met,yes,yes
+RT11A,2,preRT,GTR,wt,met,no,no
+RT12A,2,preRT,GTR,wt,met,no,no
+RT13A,2,preRT,STR,wt,met,yes,yes
+RT14A,2,postRT,STR,wt,met,yes,yes
+RT15A,2,preRT,GTR,wt,met,no,yes
+RT16A,2,postRT,GTR,wt,met,no,yes
+RT17A,2,preRT,STR,wt,met,yes,yes
+RT18A,2,postRT,STR,wt,met,yes,yes
+RT19A,2,preRT,GTR,wt,met,yes,yes
+RT20A,2,preRT,GTR,wt,met,yes,yes
+RT21A,3,preRT,STR,mut,no met,yes,yes
+RT23A,3,preRT,STR,NA,NA,yes,yes
+RT24A,3,postRT,STR,NA,NA,yes,yes
+RT25A,3,preRT,GTR,mut,no met,no,no
+RT26A,3,postRT,GTR,mut,no met,no,no
+RT27A,3,preRT,GTR,wt,met,no,yes
+RT28A,3,postRT,GTR,wt,met,no,yes
+RT29A,3,preRT,NA,mut,met,no,no
+RT30A,3,postRT,NA,mut,met,no,no
+RT31A,4,preRT,GTR,mut,met,yes,yes
+RT32A,4,postRT,GTR,mut,met,yes,yes
+RT33A,4,preRT,STR,wt,met,yes,yes
+RT34A,4,postRT,STR,wt,met,yes,yes
+RT35A,4,preRT,GTR,wt,met,yes,yes
+RT36A,4,preRT,GTR,wt,met,no,no
+RT37A,4,postRT,GTR,wt,no met,yes,no
+RT38A,4,preRT,STR,wt,met,NA,yes
+RT39A,4,preRT,GTR,wt,met,yes,yes
+RT40A,4,preRT,STR,wt,met,no,no
+RT41A,5,NA,NA,NA,NA,NA,NA
+RT42A,5,preRT,STR,wt,NA,yes,yes
+RT43A,5,preRT,STR,wt,met,yes,yes
+RT44A,5,preRT,STR,wt,met,yes,yes
+RT45A,5,postRT,STR,wt,met,yes,yes
+RT46A,5,preRT,GTR,wt,NA,yes,yes
+RT47A,5,preRT,GTR,wt,NA,yes,yes
+RT48A,5,postRT,STR,wt,no met,yes,yes
+RT01B,6,preRT,STR,wt,met,no,no
+RT02B,6,preRT,STR,wt,met,yes,no
+RT03B,6,preRT,STR,wt,no met,yes,yes
+RT04B,6,preRT,NA,NA,NA,NA,NA
+RT05B,6,preRT,GTR,wt,no met,no,no
+RT06B,6,preRT,NA,NA,NA,NA,NA
+RT07B,6,preRT,GTR,wt,no met,yes,yes
+RT08B,6,Healthy,NA,NA,NA,NA,NA
+RT09B,6,Healthy,NA,NA,NA,NA,NA
+RT10B,6,Healthy,NA,NA,NA,NA,NA
+RT11B,7,Healthy,NA,NA,NA,NA,NA
+RT12B,7,Healthy,NA,NA,NA,NA,NA
+RT13B,7,Healthy,NA,NA,NA,NA,NA
+RT14B,7,postRT,GTR,wt,no met,yes,no
+RT15B,7,postRT,GTR,wt,met,yes,yes
+RT16B,7,postRT,STR,wt,met,no,no
+RT17B,7,postRT,STR,wt,met,no,yes
+RT18B,7,preRT,STR,wt,met,no,yes
+RT19B,7,postRT,GTR,wt,met,yes,yes
+RT20B,7,postRT,STR,wt,no met,yes,yes
+RT21B,8,preRT,STR,wt,no met,yes,yes
+RT22B,8,preRT,GTR,wt,no met,no,yes
+RT23B,8,preRT,GTR,wt,met,yes,yes
+RT24B,8,preRT,GTR,wt,no met,yes,yes
+RT25B,8,preRT,STR,wt,no met,yes,yes
+RT26B,8,preRT,STR,wt,met,no,yes
+RT27B,8,preRT,GTR,wt,no met,yes,yes
+RT28B,8,postRT,GTR,wt,no met,yes,yes
+RT29B,8,Healthy,NA,NA,NA,NA,NA
+RT30B,8,Healthy,NA,NA,NA,NA,NA
+RT31B,9,Healthy,NA,NA,NA,NA,NA
+RT32B,9,Healthy,NA,NA,NA,NA,NA
+RT33B,9,Healthy,NA,NA,NA,NA,NA
+RT34B,9,Healthy,NA,NA,NA,NA,NA
+RT35B,9,Healthy,NA,NA,NA,NA,NA
+RT36B,9,Healthy,NA,NA,NA,NA,NA
+RT37B,9,Healthy,NA,NA,NA,NA,NA
+RT38B,9,Healthy,NA,NA,NA,NA,NA
+RT39B,9,Healthy,NA,NA,NA,NA,NA
+RT40B,9,Healthy,NA,NA,NA,NA,NA
+RT41B,10,preRT,STR,wt,no met,yes,yes
+RT42B,10,preRT,GTR,mut,met,yes,no
+RT43B,10,preRT,GTR,mut,met,yes,no
+RT44B,10,preRT,STR,wt,no met,yes,no
+RT45B,10,preRT,GTR,mut,met,no,no
+RT46B,10,preRT,STR,wt,no met,yes,no
+RT47B,10,preRT,STR,wt,met,yes,yes
+RT48B,10,preRT,STR,wt,no met,yes,no
