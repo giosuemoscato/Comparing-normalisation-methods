@@ -10,7 +10,7 @@ In questa repository troverete una serie di file e cartelle:
 
       - Il file "Comparing Normalisation methods.pdf" mostra l'output del file .Rmd in formato pdf
 
-      - La cartella Comparing-Normalisation-methods_files contiene i file .png che ho generato per svolgere le analisi
+      - La cartella Comparing-Normalisation-methods_files contiene i file .png che ho generato durante le analisi
 
       - Il file "GBM2.csv" contiene i dati di espressione dei miRNA del secondo round di sequenziamento
 
