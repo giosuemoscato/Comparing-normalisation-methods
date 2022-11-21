@@ -1,0 +1,531 @@
+---
+title: "Comparing Normalisation methods"
+author: "Giosuè Moscato"
+date: "2022-11-18"
+output: html_document
+---
+
+```{r,include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,warning=FALSE,message=FALSE,cache = TRUE)
+```
+
+```{r}
+library(edgeR)
+library(DESeq2)
+library(RSEQNORM) #For mixNorm
+library(DANA) #For Poisson norm
+library(GMPR)
+library(sva) #For Combat_seq
+library(reshape2) #For function melt
+library(ggplot2)
+library(plotly)
+library(ggVennDiagram)
+library(EnvStats) #For qqplots
+
+
+```
+
+
+## 0. Loading the data
+The data that will be used for this analysis comes from the second round of sequencing. This is a preview of the matrix:
+
+```{r}
+#GBM <- read.csv("~/Desktop/ExosomeGBM/ExosomeGBM/02 DATA/GBM.csv", row.names=1)
+#just II seq
+GBM <- read.csv("~/Desktop/ExosomeGBM/ExosomeGBM/02 DATA/GBM2.csv", row.names=1)
+colnames(GBM) <- paste0(names(GBM),"B")
+#GBM2 <- GBM[,46:83]
+
+head(GBM[,11:20])
+```
+The initial data has the following dimensions (rows = miRNAs, columns = samples):
+```{r}
+dim(GBM)
+```
+
+
+Furthermore we will use a second matrix containing metadata for each sample
+```{r}
+SampleType <-read.csv("~/Desktop/ExosomeGBM/ExosomeGBM/02 DATA/SampleType/SampleType.csv")
+head(SampleType[48:90,])
+```
+
+
+## 1. Setting cut-off
+
+Selection of a subset of samples using a quantile cut-off value, the upper quartile.
+
+For this analysis we will subset those samples with the value of the 3rd quartile > 0. The use of this cut-off will remove those samples that have a number of zero miRNA counts greater than 25% of all the miRNAs that were sequenced across all the samples.
+
+```{r}
+#qGBM <- GBM[,apply(GBM, 2, quantile, 0.75)>0]
+qGBM <- GBM[,apply(GBM, 2, quantile, 0.87)>0]
+#qGBM <- GBM2[,apply(GBM2, 2, quantile, 0.75)>0]
+```
+
+```{r}
+mymeta <- SampleType[SampleType$Sample.Id %in% names(qGBM),]
+```
+
+The subsetted data has the following dimensions (rows, columns):
+```{r}
+dim(qGBM)
+```
+
+
+## 2. Normalisation methods
+
+In this part we are going to normalise our data using different methods of normalisation.
+(I followed this article in the choose of some normalisation methods and test for the qualitative assessment of normalized data ([Optimization of miRNA-seq data preprocessing](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4652620/))
+)
+
+Several normalization methods were evaluated, including (1) cpm, (2) total count scaling, (3) upper quartile scaling (UQ), (4) TMM, (5) RLE, (6) DESeq, (7) MIXnorm , and (8) PoissonSeq. Each of these methods is described briefly.
+
+
+
+##### 1. cpm
+*Count-per-million*—the simplest form of normalization, whereby each library is adjusted for differences in sequencing depth. The counts can then be adjusted to reads per million to facilitate comparison between samples.
+
+```{r}
+cpmGBM <- as.data.frame(edgeR::cpm(qGBM))
+```
+
+
+##### 2.Total count scaling
+
+*Total count scaling*—After scaling each sample to its library size, they can be rescaled to a common value across all samples. The baseline reference can be chosen to be the sample with the median library size. If s~baseline~ is the size of the reference library, and s~i~ is the sum of all reads of the any given library, then the normalization factor is as follows:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" id="MM1" overflow="scroll">
+  <mrow>
+    <msub>
+      <mi>d</mi>
+      <mi>i</mi>
+    </msub>
+    <mo>=</mo>
+    <mfrac>
+      <mrow>
+        <msub>
+          <mi>s</mi>
+          <mrow>
+            <mi>b</mi>
+            <mi>a</mi>
+            <mi>s</mi>
+            <mi>e</mi>
+            <mi>l</mi>
+            <mi>i</mi>
+            <mi>n</mi>
+            <mi>e</mi>
+          </mrow>
+        </msub>
+      </mrow>
+      <mrow>
+        <msub>
+          <mi>s</mi>
+          <mi>i</mi>
+        </msub>
+      </mrow>
+    </mfrac>
+  </mrow>
+</math>
+
+and the counts for the normalized samples would be
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" id="MM2" overflow="scroll">
+  <mrow>
+    <msubsup>
+      <mi>x</mi>
+      <mi>i</mi>
+      <mo>&#x2032;</mo>
+    </msubsup>
+    <mo>=</mo>
+    <msub>
+      <mi>d</mi>
+      <mi>i</mi>
+    </msub>
+    <msub>
+      <mi>x</mi>
+      <mi>i</mi>
+    </msub>
+  </mrow>
+</math>
+
+where x~i~ is the raw count for a specific target.
+
+```{r}
+Sbaseline <- mean(as.numeric(apply(qGBM,2,sum)))
+Si <- as.numeric(apply(qGBM,2,sum))
+normfactor <- Sbaseline/Si
+tcsGBM <- qGBM
+for (i in 1:ncol(qGBM)){
+        tcsGBM[,i] <- qGBM[,i]/normfactor[i]
+}
+```
+
+
+##### 3. UQ normalisation
+
+*Upper-quartile scaling*—In RNA-seq experiments, the predominance of zero and low-gene counts has led to the suggestion of a modified quantile-normalization method: the upper quartile of expressed miRNAs is used instead as a linear scaling factor. This method has been shown to yield better concordance with qPCR results than linear total counts scaling for RNA-seq data ([1](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2838869/)). It is expected that in miRNA-seq experiments, the 75^th^ percentile of the data will also be found at only 1 or 2 copies/library.
+
+```{r}
+dge <- DGEList(qGBM)
+
+#dge2  <- calcNormFactors(dge, method = "upperquartile", p=0.75)
+dge2  <- calcNormFactors(dge, method = "upperquartile", p=0.87)
+
+uqGBM <- cpm(dge2,normalized.lib.sizes=TRUE)
+uqGBM <- as.data.frame(uqGBM)
+```
+
+
+
+##### 4. TMM
+
+*Trimmed mean of M*—Normalization by total count scaling makes intuitive sense because it gives us the proportion of counts for a specific target across all samples. If a miRNA is present in the same proportion across all samples, it will be deemed as non-differentially expressed. However, this method does not take into consideration the potentially different RNA composition across the samples. TMM, proposed by Robinson et al. for RNA-seq data normalization, calculates a linear scaling factor, d~i~, for sample *i*, based on a weighted mean after trimming the data by log fold-changes *(M)* relative to a reference sample and by absolute intensity (A) ([2](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2864565/)). TMM normalization takes into account the composition of the RNA population being sampled, which is neglected in total count scaling. This method is implemented in the R Bioconductor package edgeR, with default trimming of M-value by 30% and A-values by 5%.
+
+```{r}
+dge <- DGEList(qGBM)
+dge2 <- calcNormFactors(dge, method="TMM")
+tmmGBM  <- as.data.frame(cpm(dge2,normalized.lib.sizes=TRUE))
+```
+
+
+##### 5. RLE normalisation
+
+*Relative Log Expression*—Similar to TMM, this normalization method is based on the hypothesis that the most genes are not DE. For a given sample, the RLE scaling factor is calculated as the median of the ratio, for each gene, of its read counts over its geometric mean across all samples. By assuming most genes are not DE, the median of the ratio for a given sample is used as a correction factor to all read counts to fulfill this hypothesis ([3](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0206312#)). This normalization method is included in the DESeq and DESeq2 Bioconductor packages.
+
+
+```{r}
+dge <- DGEList(qGBM)
+dge2  <- calcNormFactors(dge, method = "RLE")
+rleGBM <- as.data.frame(cpm(dge2,normalized.lib.sizes=TRUE))
+```
+
+
+##### 6. DeSeq2
+
+*DESeq*—To perform differential expression analysis using count data, Anders and Huber proposed modeling the data with the negative binomial distribution, and incorporating data-driven prior distributions to estimate the dispersion and fold changes ([4](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3218662/)). As a data preprocessing step, the authors introduced the size factor—a scaling factor—to bring the count values across all the samples to a common scale. The size factor for a given library is defined as the median of the ratios of observed counts to the geometric mean of each corresponding target over all samples. This method is implemented in the R Bioconductor package DESeq.
+
+```{r}
+dds <- DESeqDataSetFromMatrix(qGBM, data.frame(data=rep(1,ncol(qGBM)),row.names = names(qGBM)), design = ~ 1)
+dds <- estimateSizeFactors(dds)
+deseqGBM <- as.data.frame(counts(dds, normalized=TRUE))
+```
+
+
+##### 7. MIXnorm
+
+*MIXnorm* is a new normalization method, labeled MIXnorm, for FFPE RNA-seq data (formalin-fixed paraffin-embedded). Though a number of normalization methods are available for RNA-seq data, none has been specifically designed for FFPE samples, of which a prominent feature is sparsity (i.e. excessive zero or small counts), caused by RNA degradation in such samples. MIXnorm relies on a two-component mixture model, which models non-expressed genes by zero-inflated Poisson distributions and models expressed genes by truncated normal distributions. [link](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7267832/) for further information. 
+
+The reason why I decided to test this normalisation method is that looking at the sctructure of our data we can notice the same features of FFPE samples, sparsity and excessive zero or small counts.
+
+```{r, results='hide'}
+mixGBM_ <- MIXnorm(qGBM, max_iter = 20, tol = 0.01, appr = T)
+mixGBM <- as.data.frame(mixGBM_[["MIX_normalized_log"]])
+mixGBM <- exp(mixGBM)
+```
+
+
+##### 8. PoissonSeq
+
+*PoissonSeq* (PS) models RNA-seq data by a Poisson log-linear model. Further information available [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3372940/)
+
+```{r,results='hide'}
+res <- norm.PoissonSeq(qGBM)
+poissonGBM <- as.data.frame(res$dataNormalized)
+```
+
+
+
+## 3. Batch effect correction
+
+For the Batch effect correction we will use the Combat_seq function implemented in the R package *sva*. ComBat allows users to adjust for batch effects in datasets where the batch covariate is known, using methodology described in Johnson et al. 2007. It uses either parametric or non-parametric empirical Bayes frameworks for adjusting data for batch effects. Users are returned an expression matrix that has been corrected for batch effects. The input data are assumed to be cleaned and normalized before batch effect removal.
+
+ComBat_seq is an improved model from ComBat using negative binomial regression, which specifically targets RNA-Seq count data.
+
+We wiil apply the Combat_seq function to the different-normalised data using the following matrix. The second column of this matrix indicate the number of batch for each sample:
+
+```{r}
+mymeta
+```
+
+```{r}
+GBMlist <- list(qGBM,
+cpmGBM,
+tcsGBM,
+tmmGBM,
+uqGBM,
+rleGBM,
+deseqGBM,
+mixGBM,
+poissonGBM)
+
+names(GBMlist) <- c("BC",
+"cpm",
+"tcs" ,
+"TMM",
+"UQ" ,
+"RLE" ,
+"DESeq2" ,
+"MixNorm" ,
+"PoissonSeq")
+```
+
+```{r,results='hide'}
+all_GBM <- lapply(GBMlist, function(x){
+        as.data.frame(apply(ComBat_seq(as.matrix(x),batch=mymeta$Batch,group= mymeta$Type ),c(1,2),round))
+})
+
+all_GBMmx <- lapply(GBMlist, function(x){
+        apply(ComBat_seq(as.matrix(x),batch=mymeta$Batch,group=mymeta$Type),c(1,2),round)
+})
+```
+
+```{r}
+all_GBM[[10]] <- qGBM
+all_GBMmx[[10]] <- as.matrix(qGBM)
+names(all_GBM) <- names(all_GBMmx) <- c(names(GBMlist),"raw")
+```
+
+## 4. Global assessment of normalised and batch corrected data
+
+```{r}
+AllMelted <- melt(all_GBMmx)
+AllMelted$value <- log2(AllMelted$value+1)
+AllMelted$L1 <- as.factor(AllMelted$L1)
+level <- c("raw","BC","cpm","tcs","RLE","UQ","TMM","DESeq2","MixNorm","PoissonSeq")
+```
+
+
+#### 1. Comparison of data distribution
+
+As an illustration of the different normalization methods, the absolute distribution of the miRNA count data following normalization and batch correction can be visualized using density distribution curves.
+
+```{r}
+g <- ggplot(AllMelted, aes(x=value, color=Var2)) +
+geom_density(show.legend = F) +
+facet_wrap(~factor(L1, levels = level)) +theme_bw()
+```
+
+
+```{r}
+g1 <- g + xlim(-2.5,NA)+
+coord_cartesian(xlim =c(NA,10),ylim = c(NA,1.5))
+#ggtitle("density plots with no outline")
+ggplotly(g1)
+```
+To avoid problems associated with zero values, the data were log2 transformed after the addition of +1 to all counts. From the density curves of the raw counts, it is evident that there are some inconsistencies between the distribution profiles of the samples. BC shows the distribution of the data that was just batch corrected (no norm method applied).
+Adjusting the data by total count scaling introduces more variability to the data, whereas all other methods resulted in more similar distribution across all samples. The only exceptions are the samples RT31B and RT37B that show a different distribution in the cpm,RLE,UQ, and TMM normalisation methods.
+
+
+#### 2. Variance comparison 
+
+Boxplots of the variance distribution.
+
+```{r}
+variance <- as.data.frame(with(AllMelted,tapply(value, list(L1,Var1), var)))
+variance$group <- row.names(variance)
+dat.m <- melt(variance, id.vars = "group")
+dat.m$group <- factor(dat.m$group,levels = level)
+g2 <- ggplot(dat.m, aes(group, value)) + geom_boxplot(outlier.shape = NA)+ labs(title = "Variance of the log2(counts +1)", x = "Norm methods", y = "Variance")+theme(plot.title = element_text(hjust = 0.5))+coord_cartesian(ylim = c(NA,5))
+ggplotly(g2)
+#g2
+```
+
+The variance of the log2 counts of all miRNAs was computed across the samples, and visualized using boxplots. The data are grouped according to the normalization method. A clear increase in variance is observed in the data normalized by cpm, total count scaling, RLE, UQ, and TMM while a decrease is seen in DeSeq2, MixNorm, or PoissonSeq normalized data.
+
+
+#### 3. Comparison of linearity of the ranks between raw and normalised data
+
+Scatterplot of the rank of each miRNA before normalisation (x) and after normalisation (y)
+
+```{r}
+method <- "average"
+rankGBM <- apply(qGBM, 2, rank, ties.method=method)
+avg.rankGBM <- apply(rankGBM, 1, mean)
+
+avg.rankallGBM <- lapply(all_GBMmx, function(x){
+        as.matrix(apply(apply(x, 2, rank, ties.method=method), 1, mean))
+})
+```
+
+```{r}
+Melted_avg.rankallGBM<- melt(avg.rankallGBM[level[2:10]])
+Melted_avg.rankallGBM$x <- rep(avg.rankGBM,9)
+ggplotly(ggplot(data = Melted_avg.rankallGBM, aes(x=x,y=value,))+facet_wrap(~factor(L1, levels=level[2:10]))+geom_point())
+```
+
+
+here we measure the Pearson correlation between the ranks of each miRNA before and after normalisation:
+
+```{r}
+Melted_avg.rankallGBM$L1 <- factor(Melted_avg.rankallGBM$L1,levels =level[2:10])
+
+with(Melted_avg.rankallGBM,tapply(value, L1, function(x){
+        cor(avg.rankGBM, x , method = "pearson")*100
+}))
+```
+
+## 5. DE analysis
+
+In this part we will look for Differential Expressed miRNAs between pre-RadioTherapy and Healthy samples and across a subset of different normalisation methods.
+For DE analysis we will use **DESeq** function from the *DESeq2* package with the following parameters:
+
+. adjusted p-value < 0.05
+
+. log2FoldChange > 0 (up-regulated) or < 0 (down-regulated)
+
+
+```{r message=FALSE, include=FALSE}
+MyDEA <- function(x,variable, groups){
+        index <- mymeta$Sample.Id[!is.na(mymeta[,variable])]
+        newtable <- mymeta[!is.na(mymeta[,variable]),]
+        dds <- DESeqDataSetFromMatrix(x[,index],colData = newtable, design =as.formula(paste0("~",variable)))
+        dds <- estimateSizeFactors(dds)
+        sizeFactors(dds) <- 1
+        ddsDE <- DESeq(dds)
+        res <- results(ddsDE, alpha = 0.05, contrast = c(variable, groups))
+        UP <- subset(res, log2FoldChange > 0 & padj <0.05)@rownames
+        DOWN <- subset(res, log2FoldChange < 0 & padj <0.05)@rownames
+        result <- list(UP=UP,DOWN=DOWN, res=subset(res, log2FoldChange > 0 & padj <0.05))
+        result
+        }
+
+try <- lapply(all_GBM,MyDEA,variable="Type", groups=c("preRT","Healthy"))
+```
+
+```{r}
+tryUP <- lapply(try, function(x){x$UP})[c(4,5,7,8,9)]
+tryDOWN <- lapply(try, function(x){x$DOWN})[c(4,5,7,8,9)]
+names(tryUP) <- names(tryDOWN) <- c("TMM","UQ","DESeq2","mixNorm","PoissonSeq")
+
+```
+
+```{r}
+ggVennDiagram(tryUP, label_alpha = 0,label = "count")+ scale_fill_gradient(low="#faf202",high = "#fc5e03")+labs(title="DE miRNAs preRT vs Healthy (UP)")+xlim(-100,1200)+theme(plot.title = element_text(hjust = 0.5))
+```
+
+This first Venn diagram shows the logical relation between sets of DE miRNAs (up-regulated) across different normalisation methods. A total of 24 miRNAs are Differentially Expressed in 5 Normalisation methods as showed in the plot
+
+
+```{r}
+ggVennDiagram(tryDOWN, label_alpha = 0,label = "count")+ scale_fill_gradient(low="yellow",high = "red")+labs(title="DE miRNAs preRT vs Healthy (DOWN)")+
+xlim(-100,1200)+theme(plot.title = element_text(hjust = 0.5))
+```
+
+This second Venn diagram shows the logical relation between sets of DE miRNAs (down-regulated) across different normalisation methods. A total of 5 miRNAs are Differentially Expressed in 5 Normalisation methods as showed in the plot
+
+
+## 6. Heatmaps
+
+A heatmap is a data visualization technique that shows magnitude of a phenomenon as color in two dimensions. 
+
+Here we show the expression of the 5 down-regulated and 24 up-regulated miRNAs across the samples. Samples from *RT21B* to *RT48B* are **pre-radiotherapy** samples, while samples from *RT11B* to *RT40B* are **Healthy** samples.
+
+```{r}
+preRT <- mymeta$Sample.Id[mymeta$Type=="preRT"]
+Healthy <- mymeta$Sample.Id[mymeta$Type=="Healthy"]
+common <-  c(Reduce(intersect,tryUP),Reduce(intersect,tryDOWN))
+
+heatmap(all_GBMmx$raw[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main ="unnormalised",margins = c(3, 0))
+
+heatmap(all_GBMmx$BC[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main ="batch corrected",margins = c(3, 0))
+
+heatmap(all_GBMmx$TMM[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main = "TMM",margins = c(3, 0))
+heatmap(all_GBMmx$UQ[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main = "UQ",margins = c(3, 0))
+
+heatmap(all_GBMmx$DESeq2[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main = "DESeq2",margins = c(3, 0))
+
+heatmap(all_GBMmx$MixNorm[common,c(preRT,Healthy)], Colv = NA,Rowv = NA,main ="MixNorm",margins = c(3, 0))
+
+heatmap(all_GBMmx$PoissonSeq[common,c(preRT,Healthy)], Colv = NA,Rowv= NA,main="PoissonSeq",margins = c(3, 0))
+
+```
+
+```{r}
+preRT <- mymeta$Sample.Id[mymeta$Type=="preRT"]
+Healthy <- mymeta$Sample.Id[mymeta$Type=="Healthy"]
+common <-  c(Reduce(intersect,tryUP),Reduce(intersect,tryDOWN))
+
+annotation_col <- data.frame(row.names = c(preRT,Healthy), SampleType= c(rep("preRT", length(preRT)),rep("Healthy",length(Healthy))))
+annotation_row <- data.frame(row.names = c(Reduce(intersect,tryUP),Reduce(intersect,tryDOWN)), DEmiRNA= c(rep("UP", length(Reduce(intersect,tryUP))),rep("DOWN",length(Reduce(intersect,tryDOWN)))))
+
+#pheatmap::pheatmap(all_GBMmx$raw[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (raw)")
+
+#pheatmap::pheatmap(all_GBMmx$BC[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (BC)")
+
+#pheatmap::pheatmap(all_GBMmx$cpm[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (cpm)")
+
+#pheatmap::pheatmap(all_GBMmx$tcs[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (tcs)")
+
+#pheatmap::pheatmap(all_GBMmx$TMM[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (TMM)")
+
+#pheatmap::pheatmap(all_GBMmx$UQ[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (UQ)")
+
+#pheatmap::pheatmap(all_GBMmx$RLE[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (RLE)")
+
+#pheatmap::pheatmap(all_GBMmx$DESeq2[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (DESeq2)")
+
+#pheatmap::pheatmap(all_GBMmx$MixNorm[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (MixNorm)")
+
+#pheatmap::pheatmap(all_GBMmx$PoissonSeq[common,c(preRT,Healthy)],scale = "row",cluster_rows = FALSE,cluster_cols = F,color=colorRampPalette(c("navy", "white", "red"))(50),annotation_row = annotation_row,annotation_col = annotation_col,cutree_cols=2,cutree_rows = 2,main="Expression of DE miRNAs (PoissonSeq)")
+
+```
+
+
+```{r}
+#######codice inutilizzato
+#Ranking
+#rankGBM <- apply(qGBM, 2, rank, ties.method="average")
+#rankGBM <- as.data.frame(rankGBM[order(apply(rankGBM, 1, mean),decreasing = TRUE),])
+```
+
+```{r message=FALSE, include=FALSE,warning=FALSE}
+#######codice inutilizzato
+MyDEA3 <- function(x,variable, groups){
+        index <- mymeta$Sample.Id[!is.na(mymeta[,variable])]
+        newtable <- mymeta[!is.na(mymeta[,variable]),]
+        dds <- DESeqDataSetFromMatrix(x[,index],colData = newtable, design =as.formula(paste0("~",variable)))
+        dds <- estimateSizeFactors(dds)
+        sizeFactors(dds) <- 1
+        ddsDE <- DESeq(dds)
+        res <- results(ddsDE, alpha = 0.05, contrast = c(variable, groups))
+        result <- subset(res, padj <0.05)@rownames
+        result
+        }
+
+#try <- lapply(all_GBM,MyDEA3,variable="Type", groups=c("preRT","Healthy"))
+
+#trydiff <- try[c(4,5,7,8,9)]
+#names(trydiff) <- c("TMM","UQ","DESeq2", "mixNorm","PoissonSeq")
+
+#allseq <- Reduce(intersect,tryUP)
+```
+
+```{r message=FALSE, include=FALSE}
+#######codice inutilizzato
+MyDEA2 <- function(x,variable, groups){
+        index <- mymeta$Sample.Id[!is.na(mymeta[,variable])&mymeta$Type=="preRT"]
+        newtable <- mymeta[!is.na(mymeta[,variable])&mymeta$Type=="preRT",]
+        dds <- DESeqDataSetFromMatrix(x[,index],colData = newtable, design =as.formula(paste0("~",variable)))
+        dds <- estimateSizeFactors(dds)
+        sizeFactors(dds) <- 1
+        ddsDE <- DESeq(dds)
+        res <- results(ddsDE, alpha = 0.05, contrast = c(variable, groups))
+        UP <- subset(res, log2FoldChange > 0 & padj <0.05)@rownames
+        DOWN <- subset(res, log2FoldChange < 0 & padj <0.05)@rownames
+        result <- list(UP=UP,DOWN=DOWN)
+        result
+}
+```
+
+```{r}
+#######codice inutilizzato
+#trySurgery <- lapply(all_GBM,MyDEA2,variable="Surgery", groups=c("GTR","STR"))
+#tryIDH1 <- lapply(all_GBM,MyDEA2,variable="IDH1", groups=c("wt","mut"))
+#tryMGMT <- lapply(all_GBM,MyDEA2,variable="MGMT", groups=c("met","no met"))
+#tryRecurrence <- lapply(all_GBM,MyDEA2,variable="Recurrence", groups=c("yes","no"))
+#tryDeath <- lapply(all_GBM,MyDEA2,variable="Death", groups=c("yes","no"))
+```
+
+
+
